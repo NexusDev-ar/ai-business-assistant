@@ -137,13 +137,26 @@
 
   // botones de opción clickeables
   function clearChips(){ document.querySelectorAll(".chips").forEach(c => c.remove()); }
+  // ícono según el tema de la opción (le da color a los botones)
+  function iconFor(t){
+    const s = t.toLowerCase();
+    if(/web|p[aá]gina|landing|sitio/.test(s)) return "🌐 ";
+    if(/tienda|ecommerce|e-commerce|shop|online/.test(s)) return "🛒 ";
+    if(/sistema|gesti[oó]n|panel|software|app/.test(s)) return "⚙️ ";
+    if(/asistente|bot|\bia\b|chat/.test(s)) return "🤖 ";
+    if(/asesor|humano|hablar|persona|contact|llam/.test(s)) return "👤 ";
+    if(/turno|reserva|agenda|tanda|cita/.test(s)) return "📅 ";
+    if(/precio|presupuesto|costo|cotiz/.test(s)) return "💬 ";
+    if(/s[ií]\b|dale|listo|ok/.test(s)) return "✅ ";
+    return "✨ ";
+  }
   function renderChips(opts){
     clearChips();
     if(!opts || !opts.length) return;
     const box = document.createElement("div"); box.className = "chips";
     opts.forEach(op => {
-      const b = document.createElement("button"); b.className = "chip"; b.textContent = op;
-      b.onclick = () => { clearChips(); sendMessage(op); };
+      const b = document.createElement("button"); b.className = "chip"; b.textContent = iconFor(op) + op;
+      b.onclick = () => { clearChips(); sendMessage(op); };  // manda el texto sin ícono
       box.appendChild(b);
     });
     chat.appendChild(box); chat.scrollTop = chat.scrollHeight;
