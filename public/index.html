@@ -34,16 +34,19 @@
   }
   .launcher:hover{ transform:scale(1.06); }
   .launcher .close-ico{ display:none; }
-  body.open .launcher .chat-ico{ display:none; }
-  body.open .launcher .close-ico{ display:block; }
+  body.open .launcher .chat-ico, body.mini .launcher .chat-ico{ display:none; }
+  body.open .launcher .close-ico, body.mini .launcher .close-ico{ display:block; }
 
   .widget{
     position:fixed; right:22px; bottom:96px; z-index:50;
-    width:380px; max-width:calc(100vw - 32px); height:580px; max-height:calc(100dvh - 130px);
+    width:380px; max-width:calc(100vw - 32px);
     background:var(--panel); border:1px solid var(--line); border-radius:16px; overflow:hidden;
     display:none; flex-direction:column; box-shadow:0 24px 60px rgba(0,0,0,.5);
+    height:580px; max-height:calc(100dvh - 130px);
+    transition:height .28s cubic-bezier(.2,.8,.2,1);
   }
-  body.open .widget{ display:flex; animation:pop .18s ease; }
+  body.open .widget, body.mini .widget{ display:flex; animation:pop .22s ease; }
+  body.mini .widget{ height:300px; }               /* chiquito: saludo + input */
   @keyframes pop{ from{ opacity:0; transform:translateY(14px) scale(.96);} to{ opacity:1; transform:none; } }
 
   .whead{ background:linear-gradient(135deg,#1c1c23,#141419); padding:15px 16px; display:flex; align-items:center; gap:11px; border-bottom:1px solid var(--line); }
@@ -62,7 +65,6 @@
   .msg.me{ background:var(--me); color:var(--amber-ink); font-weight:500; border-bottom-right-radius:4px; }
   .typing{ color:var(--soft); font-style:italic; }
 
-  /* botones de opción (quick replies) */
   .chips{ display:flex; flex-wrap:wrap; gap:7px; margin-top:2px; }
   .chip{ background:transparent; border:1px solid var(--amber); color:var(--amber); border-radius:16px; padding:8px 13px; font-size:13px; cursor:pointer; transition:all .12s; font-weight:500; }
   .chip:hover{ background:var(--amber); color:var(--amber-ink); }
@@ -116,18 +118,32 @@
   const send = document.getElementById("send");
   const statusEl = document.getElementById("status");
   const messages = [];
-  let greeted = false;
+  const STARTERS = ["Necesito una web","Un sistema a medida","Una tienda online","Un asistente como este"];
+  let greeted = false, dismissed = false;
 
-  function openWidget(){
-    document.body.classList.add("open");
-    if(!greeted){ greeted = true;
-      bubble("¡Hola! 👋 Soy el asistente de NexusDev. ¿En qué te puedo ayudar?", "bot");
-      renderChips(["Necesito una web","Un sistema a medida","Una tienda online","Un asistente como este"]);
-    }
-    setTimeout(()=>input.focus(),100);
+  function ensureGreeting(){
+    if(greeted) return; greeted = true;
+    bubble("¡Hola! 👋 Soy el asistente de NexusDev. ¿En qué te puedo ayudar?", "bot");
+    renderChips(STARTERS);
   }
-  function closeWidget(){ document.body.classList.remove("open"); }
-  function toggleWidget(){ document.body.classList.contains("open") ? closeWidget() : openWidget(); }
+  function openMini(){                       // se abre solo, chiquito
+    if(dismissed || document.body.classList.contains("open")) return;
+    document.body.classList.add("mini"); ensureGreeting();
+  }
+  function openWidget(){                     // abierto completo
+    document.body.classList.remove("mini"); document.body.classList.add("open");
+    ensureGreeting(); setTimeout(()=>input.focus(),120);
+  }
+  function expand(){                         // chiquito -> se agranda al escribir
+    if(document.body.classList.contains("mini")){
+      document.body.classList.remove("mini"); document.body.classList.add("open");
+    }
+  }
+  function closeWidget(){ document.body.classList.remove("mini","open"); dismissed = true; }
+  function toggleWidget(){
+    (document.body.classList.contains("open") || document.body.classList.contains("mini")) ? closeWidget() : openWidget();
+  }
+  input.addEventListener("focus", expand);   // al tocar el input, se agranda
 
   function bubble(text, who){
     const row = document.createElement("div"); row.className = "row " + who;
@@ -135,9 +151,6 @@
     row.appendChild(m); chat.appendChild(row); chat.scrollTop = chat.scrollHeight; return row;
   }
 
-  // botones de opción clickeables
-  function clearChips(){ document.querySelectorAll(".chips").forEach(c => c.remove()); }
-  // ícono según el tema de la opción (le da color a los botones)
   function iconFor(t){
     const s = t.toLowerCase();
     if(/web|p[aá]gina|landing|sitio/.test(s)) return "🌐 ";
@@ -150,19 +163,19 @@
     if(/s[ií]\b|dale|listo|ok/.test(s)) return "✅ ";
     return "✨ ";
   }
+  function clearChips(){ document.querySelectorAll(".chips").forEach(c => c.remove()); }
   function renderChips(opts){
     clearChips();
     if(!opts || !opts.length) return;
     const box = document.createElement("div"); box.className = "chips";
     opts.forEach(op => {
       const b = document.createElement("button"); b.className = "chip"; b.textContent = iconFor(op) + op;
-      b.onclick = () => { clearChips(); sendMessage(op); };  // manda el texto sin ícono
+      b.onclick = () => { clearChips(); sendMessage(op); };
       box.appendChild(b);
     });
     chat.appendChild(box); chat.scrollTop = chat.scrollHeight;
   }
 
-  // separa el texto de la línea "OPCIONES: a | b | c"
   function parseOptions(reply){
     const lines = reply.split("\n");
     const idx = lines.findIndex(l => /^\s*opciones\s*:/i.test(l));
@@ -174,6 +187,7 @@
 
   async function sendMessage(text){
     text = (text || "").trim(); if(!text) return;
+    expand();                                // escribir/elegir = agrandar
     clearChips();
     bubble(text, "me");
     messages.push({ role:"user", content:text });
@@ -197,6 +211,9 @@
     input.value = "";
     sendMessage(text);
   });
+
+  // se abre solo, chiquito, a los ~1.8s de entrar
+  setTimeout(openMini, 1800);
 </script>
 </body>
 </html>
