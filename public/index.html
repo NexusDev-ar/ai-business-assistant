@@ -13,7 +13,6 @@
   *{ box-sizing:border-box; margin:0; padding:0; }
   body{ font-family:-apple-system,"Segoe UI",Roboto,sans-serif; background:var(--bg); color:var(--txt); min-height:100dvh; }
 
-  /* ---- landing de fondo (para que el widget se vea "en la web") ---- */
   .hero{ max-width:1100px; margin:0 auto; padding:26px 24px; }
   .nav{ display:flex; align-items:center; gap:10px; }
   .wordmark{ font-weight:800; font-size:22px; letter-spacing:.5px; }
@@ -26,7 +25,6 @@
   .center p{ color:var(--soft); font-size:18px; margin-top:18px; max-width:600px; margin-inline:auto; }
   .cta{ margin-top:26px; display:inline-block; background:var(--amber); color:var(--amber-ink); font-weight:700; padding:13px 26px; border-radius:10px; text-decoration:none; }
 
-  /* ---- widget flotante (estilo empresa grande) ---- */
   .launcher{
     position:fixed; right:22px; bottom:22px; z-index:50;
     width:62px; height:62px; border-radius:50%; border:none; cursor:pointer;
@@ -41,10 +39,9 @@
 
   .widget{
     position:fixed; right:22px; bottom:96px; z-index:50;
-    width:380px; max-width:calc(100vw - 32px); height:560px; max-height:calc(100dvh - 130px);
+    width:380px; max-width:calc(100vw - 32px); height:580px; max-height:calc(100dvh - 130px);
     background:var(--panel); border:1px solid var(--line); border-radius:16px; overflow:hidden;
     display:none; flex-direction:column; box-shadow:0 24px 60px rgba(0,0,0,.5);
-    transform-origin:bottom right;
   }
   body.open .widget{ display:flex; animation:pop .18s ease; }
   @keyframes pop{ from{ opacity:0; transform:translateY(14px) scale(.96);} to{ opacity:1; transform:none; } }
@@ -65,6 +62,11 @@
   .msg.me{ background:var(--me); color:var(--amber-ink); font-weight:500; border-bottom-right-radius:4px; }
   .typing{ color:var(--soft); font-style:italic; }
 
+  /* botones de opción (quick replies) */
+  .chips{ display:flex; flex-wrap:wrap; gap:7px; margin-top:2px; }
+  .chip{ background:transparent; border:1px solid var(--amber); color:var(--amber); border-radius:16px; padding:8px 13px; font-size:13px; cursor:pointer; transition:all .12s; font-weight:500; }
+  .chip:hover{ background:var(--amber); color:var(--amber-ink); }
+
   .wform{ display:flex; gap:8px; padding:11px; background:var(--panel2); border-top:1px solid var(--line); }
   .wform input{ flex:1; background:var(--bg); border:1px solid var(--line); color:var(--txt); border-radius:22px; padding:10px 15px; font-size:14px; outline:none; }
   .wform input:focus{ border-color:var(--amber); }
@@ -74,7 +76,6 @@
 </style>
 </head>
 <body>
-  <!-- landing de fondo (simulada) -->
   <div class="hero">
     <nav class="nav">
       <span class="wordmark">NEXUS<span class="dev">DEV</span></span>
@@ -87,7 +88,6 @@
     <a class="cta" href="#" onclick="openWidget();return false;">Hablar con nosotros</a>
   </div>
 
-  <!-- widget de chat -->
   <div class="widget" id="widget">
     <div class="whead">
       <div class="wavatar"><b>N</b></div>
@@ -118,8 +118,12 @@
   const messages = [];
   let greeted = false;
 
-  function openWidget(){ document.body.classList.add("open"); if(!greeted){ greeted = true;
-    bubble("¡Hola! 👋 Soy el asistente de NexusDev. ¿Buscás una web, un sistema, una tienda online o un asistente como este? Contame en qué andás.", "bot"); }
+  function openWidget(){
+    document.body.classList.add("open");
+    if(!greeted){ greeted = true;
+      bubble("¡Hola! 👋 Soy el asistente de NexusDev. ¿En qué te puedo ayudar?", "bot");
+      renderChips(["Necesito una web","Un sistema a medida","Una tienda online","Un asistente como este"]);
+    }
     setTimeout(()=>input.focus(),100);
   }
   function closeWidget(){ document.body.classList.remove("open"); }
@@ -131,20 +135,54 @@
     row.appendChild(m); chat.appendChild(row); chat.scrollTop = chat.scrollHeight; return row;
   }
 
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const text = input.value.trim(); if(!text) return;
-    input.value = ""; bubble(text, "me");
+  // botones de opción clickeables
+  function clearChips(){ document.querySelectorAll(".chips").forEach(c => c.remove()); }
+  function renderChips(opts){
+    clearChips();
+    if(!opts || !opts.length) return;
+    const box = document.createElement("div"); box.className = "chips";
+    opts.forEach(op => {
+      const b = document.createElement("button"); b.className = "chip"; b.textContent = op;
+      b.onclick = () => { clearChips(); sendMessage(op); };
+      box.appendChild(b);
+    });
+    chat.appendChild(box); chat.scrollTop = chat.scrollHeight;
+  }
+
+  // separa el texto de la línea "OPCIONES: a | b | c"
+  function parseOptions(reply){
+    const lines = reply.split("\n");
+    const idx = lines.findIndex(l => /^\s*opciones\s*:/i.test(l));
+    if(idx === -1) return { text: reply.trim(), opts: [] };
+    const opts = lines[idx].replace(/^\s*opciones\s*:/i,"").split("|").map(s=>s.trim()).filter(Boolean);
+    lines.splice(idx,1);
+    return { text: lines.join("\n").trim(), opts };
+  }
+
+  async function sendMessage(text){
+    text = (text || "").trim(); if(!text) return;
+    clearChips();
+    bubble(text, "me");
     messages.push({ role:"user", content:text });
     send.disabled = true; statusEl.textContent = "escribiendo…";
     const typing = bubble("escribiendo…", "bot"); typing.querySelector(".msg").classList.add("typing");
     try{
       const r = await fetch("/api/chat", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ messages }) });
       const data = await r.json(); typing.remove();
-      const reply = data.reply || ("⚠️ " + (data.error || "algo falló"));
-      bubble(reply, "bot"); messages.push({ role:"assistant", content:reply });
+      const raw = data.reply || ("⚠️ " + (data.error || "algo falló"));
+      const { text: clean, opts } = parseOptions(raw);
+      bubble(clean, "bot");
+      messages.push({ role:"assistant", content:raw });
+      renderChips(opts);
     }catch(err){ typing.remove(); bubble("⚠️ No me pude conectar. ¿Está corriendo el servidor?", "bot"); }
     finally{ send.disabled = false; statusEl.textContent = "en línea"; input.focus(); }
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = input.value.trim(); if(!text) return;
+    input.value = "";
+    sendMessage(text);
   });
 </script>
 </body>
