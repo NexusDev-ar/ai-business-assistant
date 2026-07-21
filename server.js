@@ -12,6 +12,10 @@ app.use(express.static("public"));
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const MODEL = "llama-3.3-70b-versatile";
 
+// Aviso de lead por WhatsApp (CallMeBot). Si no estan las claves, no avisa.
+const CALLMEBOT_PHONE = process.env.CALLMEBOT_PHONE;
+const CALLMEBOT_APIKEY = process.env.CALLMEBOT_APIKEY;
+
 // ===== Base de conocimiento del asistente (info de NexusDev) =====
 const NEGOCIO = `
 Empresa: NexusDev — agencia de desarrollo web y software a medida.
@@ -63,9 +67,30 @@ Cuando muestre interés, pedile los datos de a uno: primero el nombre, después 
 después un teléfono/email o el mejor horario. Nunca pidas los 3 datos juntos. Al tener todo, cerrá:
 "¡Genial {nombre}! Le paso tus datos a un asesor de NexusDev y te contacta a la brevedad. ¡Gracias! 🙌"
 
+AVISO DE LEAD (importante, solo cuando YA tengas nombre + qué necesita + un contacto):
+Después del mensaje de cierre, agregá al final una última línea EXACTA así:
+LEAD: nombre | qué necesita | teléfono o email
+El usuario NO ve esa línea, es para el sistema. No la pongas si todavía te falta alguno de los 3 datos.
+
 ===== INFORMACIÓN DE NEXUSDEV =====
 ${NEGOCIO}
 ===================================`;
+
+// Te avisa por WhatsApp cuando entra un interesado.
+async function avisarLead(datos) {
+  if (!CALLMEBOT_PHONE || !CALLMEBOT_APIKEY) return;
+  const msg = `Nuevo interesado (web NexusDev):\n${datos}`;
+  const url =
+    "https://api.callmebot.com/whatsapp.php" +
+    `?phone=${encodeURIComponent(CALLMEBOT_PHONE)}` +
+    `&text=${encodeURIComponent(msg)}` +
+    `&apikey=${encodeURIComponent(CALLMEBOT_APIKEY)}`;
+  try {
+    await fetch(url);
+  } catch (e) {
+    console.error("No se pudo avisar el lead:", e);
+  }
+}
 
 // Endpoint del chat: recibe el historial, le antepone el cerebro, llama a Groq.
 app.post("/api/chat", async (req, res) => {
@@ -88,7 +113,15 @@ app.post("/api/chat", async (req, res) => {
       return res.status(502).json({ error: "Error de Groq: " + t });
     }
     const data = await r.json();
-    const reply = data.choices?.[0]?.message?.content?.trim() || "…";
+    let reply = data.choices?.[0]?.message?.content?.trim() || "…";
+
+    // Si el bot cerró un lead, lo detectamos, te avisamos y sacamos la línea.
+    const lead = reply.match(/^LEAD:\s*(.+)$/im);
+    if (lead) {
+      avisarLead(lead[1].trim());
+      reply = reply.replace(/^LEAD:.*$/im, "").trim();
+    }
+
     res.json({ reply });
   } catch (e) {
     res.status(502).json({ error: String(e) });
